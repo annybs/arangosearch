@@ -1,7 +1,7 @@
 {
   "name": "arangosearch",
   "version": "1.0.0",
-  "description": "",
+  "description": "Single-collection search for ArangoJS",
   "main": "dist/lib/index.js",
   "scripts": {
     "build": "tsc",
@@ -10,6 +10,12 @@
   "keywords": ["arango", "arangodb", "aql"],
   "author": "Aneurin \"Anny\" Barker Snook <a@aneur.in>",
   "license": "MIT",
+  "repository": {
+    "url": "https://github.com/annybs/arangosearch"
+  },
+  "bugs": {
+    "url": "https://github.com/annybs/arangosearch/issues"
+  },
   "dependencies": {
     "arangojs": "^7.8.0"
   },
