@@ -70,7 +70,7 @@ export declare type Terms<T> = {
  * A `SearchFn` function matches documents in a single collection and returns a `SearchResult` based on the given
  * `terms`, `limit`, and `sort`.
  */
-export declare type SearchFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, limit?: Limit, sort?: Sort<Document<T>>[] | Sort<Document<T>>) => Promise<SearchResult<T>>;
+export declare type SearchFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, limit?: Limit, sort?: Sort<Document<S>>[] | Sort<Document<S>>) => Promise<SearchResult<T>>;
 /**
  * Search results are a tuple of three values:
  *   1. The **total** number of matching documents in the searched collection, ignoring limit

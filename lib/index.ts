@@ -85,7 +85,7 @@ export type Terms<T> = {
 export type SearchFn<T extends Searchable, S extends Searchable = T> = (
   terms?: Terms<Document<DeepNonNullable<S>>>,
   limit?: Limit,
-  sort?: Sort<Document<T>>[] | Sort<Document<T>>
+  sort?: Sort<Document<S>>[] | Sort<Document<S>>
 ) => Promise<SearchResult<T>>
 
 /**
