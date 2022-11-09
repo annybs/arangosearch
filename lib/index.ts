@@ -1,6 +1,6 @@
 import { Document } from 'arangojs/documents'
 import { DocumentCollection } from 'arangojs/collection'
-import { GeneratedAqlQuery } from 'arangojs/aql'
+import { AqlLiteral, GeneratedAqlQuery } from 'arangojs/aql'
 import { Database, aql } from 'arangojs'
 
 /**
@@ -9,7 +9,8 @@ import { Database, aql } from 'arangojs'
  * `count()` provides the standard implementation.
  */
 export type CountFn<T extends Searchable, S extends Searchable = T> = (
-  terms?: Terms<Document<DeepNonNullable<S>>>
+  terms?: Terms<Document<DeepNonNullable<S>>>,
+  inject?: Inject
 ) => Promise<number>
 
 /**
@@ -55,8 +56,29 @@ export type Filter<T> = {
  */
 export type FindFn<T extends Searchable, S extends Searchable = T> = (
   terms?: Terms<Document<DeepNonNullable<S>>>,
-  sort?: Sort<Document<T>>[] | Sort<Document<T>>
+  sort?: Sort<Document<T>>[] | Sort<Document<T>>,
+  inject?: Inject
 ) => Promise<Document<T> | undefined>
+
+/**
+ * An `Inject` object allows modifying a search query with user-defined AQL literal expressions.
+ * This can be useful for complex requirements, such as joining data or setting additional variables with `LET`.
+ *
+ * All injected strings are implicitly converted to AQL literals in the query, so should be manually escaped as needed.
+ *
+ * Note that while `CountFn` and `FindFn` do not use all the same parameters as `SearchFn`, all injections are still
+ * supported so a single injection provider can be used for all query types.
+ */
+export type Inject = {
+  /** Injected before FILTER statements. */
+  beforeFilter?: string
+  /** Injected after FILTER statements, before SORT statements. */
+  beforeSort?: string
+  /** Injected after SORT statements, before LIMIT statement. */
+  beforeLimit?: string
+  /** Injected after all other statements. */
+  after?: string
+}
 
 /**
  * Query limit.
@@ -81,11 +103,27 @@ export type Terms<T> = {
 /**
  * A `SearchFn` function matches documents in a single collection and returns a `SearchResult` based on the given
  * `terms`, `limit`, and `sort`.
+ *
+ * A fourth `inject` argument can be given to add user-defined sections to the query, allowing complex requirements
+ * to be added around the core query pattern.
  */
 export type SearchFn<T extends Searchable, S extends Searchable = T> = (
   terms?: Terms<Document<DeepNonNullable<S>>>,
   limit?: Limit,
-  sort?: Sort<Document<S>>[] | Sort<Document<S>>
+  sort?: Sort<Document<S>>[] | Sort<Document<S>>,
+  inject?: Inject
+) => Promise<SearchResult<T>>
+
+/**
+ * A `SimpleSearchFn` function matches documents in a single collection and returns a `SearchResult` based on the given
+ * `terms`, `limit`, and `sort`.
+ *
+ * This type can be implemented by user code as an alternative to `SearchFn` to prevent further injections.
+ */
+export type SimpleSearchFn<T extends Searchable, S extends Searchable = T> = (
+  terms?: Terms<Document<DeepNonNullable<S>>>,
+  limit?: Limit,
+  sort?: Sort<Document<S>>[] | Sort<Document<S>>,
 ) => Promise<SearchResult<T>>
 
 /**
@@ -96,8 +134,13 @@ export type SearchFn<T extends Searchable, S extends Searchable = T> = (
  */
 export type SearchResult<T extends Searchable> = [number, Document<T>[], GeneratedAqlQuery]
 
-/** Query sort order. */
-export type Sort<T> = [keyof T, Direction]
+/**
+ * Query sort order as a tuple of key and direction.
+ *
+ * The sort key can be specified as an AQL literal, in which case it will be used exactly as given.
+ * This can be useful in conjunction with query injections.
+ */
+export type Sort<T> = [AqlLiteral | keyof T, Direction]
 
 /** Format scalar or scalar array data for use in AQL. */
 export const formatData = <T>(data: T | T[]): string =>
@@ -159,7 +202,7 @@ const parseFilterOps = <T>(search: Filter<T>) =>
  * Note: `SORT` is not prepended.
  */
 export const parseSort = <T>(s: Sort<T>[] | Sort<T>, parent: string): string[] => {
-  if (s[0] instanceof Array) return (s as Sort<T>[]).map(ss => `${parent}.${String(ss[0])} ${ss[1]}`)
+  if (s[0] instanceof Array) return (s as Sort<T>[]).map(ss => `${renderSortKey(ss, parent)} ${ss[1]}`)
   return [`${parent}.${String(s[0])} ${s[1]}`]
 }
 
@@ -182,6 +225,12 @@ export const parseTerms = <T>(s: Terms<T>, parent: string) => (Object.keys(s) as
     return filters
   }, <string[]>[])
 
+const renderSortKey = <T>([key]: Sort<T>, parent: string): string => {
+  if (key instanceof Object) return key.toAQL()
+  return `${parent}.${String(key)}`
+}
+
+
 /**
  * Build and execute a count query that matches documents in a single collection.
  * Returns the total number of matches.
@@ -197,14 +246,18 @@ export const count = <T extends Searchable, S extends Searchable = T>(
   c: DocumentCollection<T>,
   i = 'i',
   n = 'n'
-): CountFn<T, S> => async (terms) => {
+): CountFn<T, S> => async (terms, inject) => {
     const filters = terms && parseTerms(terms, i)
     const filterStr = aql.literal(filters ? filters.map(f => `FILTER ${f}`).join(' ') : '')
     const l = { i: aql.literal(i), n: aql.literal(n) }
 
     const countQuery = aql`
       FOR ${l.i} IN ${c}
+        ${inject?.beforeFilter && aql.literal(inject.beforeFilter)}
         ${filterStr}
+        ${inject?.beforeSort && aql.literal(inject.beforeSort)}
+        ${inject?.beforeLimit && aql.literal(inject.beforeLimit)}
+        ${inject?.after && aql.literal(inject.after)}
         COLLECT WITH COUNT INTO ${l.n}
         RETURN ${l.n}
     `
@@ -225,7 +278,7 @@ export const find = <T extends Searchable, S extends Searchable = T>(
   db: Database,
   c: DocumentCollection<T>,
   i = 'i'
-): FindFn<T, S> => async (terms, sort = ['_key', 'ASC']) => {
+): FindFn<T, S> => async (terms, sort = ['_key', 'ASC'], inject) => {
     const filters = terms && parseTerms(terms, 'i')
     const filterStr = aql.literal(filters ? filters.map(f => `FILTER ${f}`).join(' ') : '')
     const sortStr = aql.literal(sort ? `SORT ${parseSort(sort, 'i').join(', ')}` : '')
@@ -233,8 +286,12 @@ export const find = <T extends Searchable, S extends Searchable = T>(
 
     const query = aql`
       FOR ${l.i} IN ${c}
+        ${inject?.beforeFilter && aql.literal(inject.beforeFilter)}
         ${filterStr}
+        ${inject?.beforeSort && aql.literal(inject.beforeSort)}
         ${sortStr}
+        ${inject?.beforeLimit && aql.literal(inject.beforeLimit)}
+        ${inject?.after && aql.literal(inject.after)}
         LIMIT 1
         RETURN ${l.i}
     `
@@ -259,7 +316,7 @@ export const search = <T extends Searchable, S extends Searchable = T>(
   c: DocumentCollection<T>,
   i = 'i',
   n = 'n'
-): SearchFn<T, S> => async (terms, limit, sort = ['_rev', 'ASC']) => {
+): SearchFn<T, S> => async (terms, limit, sort = ['_rev', 'ASC'], inject) => {
     const filters = terms && parseTerms(terms, 'i')
     const filterStr = aql.literal(filters ? filters.map(f => `FILTER ${f}`).join(' ') : '')
     const limitStr = aql.literal(limit ? `LIMIT ${parseLimit(limit)}` : '')
@@ -270,7 +327,11 @@ export const search = <T extends Searchable, S extends Searchable = T>(
     if (limit) {
       const countQuery = aql`
         FOR ${l.i} IN ${c}
+          ${inject?.beforeFilter && aql.literal(inject.beforeFilter)}
           ${filterStr}
+          ${inject?.beforeSort && aql.literal(inject.beforeSort)}
+          ${inject?.beforeLimit && aql.literal(inject.beforeLimit)}
+          ${inject?.after && aql.literal(inject.after)}
           COLLECT WITH COUNT INTO ${l.n}
           RETURN ${l.n}
       `
@@ -279,9 +340,13 @@ export const search = <T extends Searchable, S extends Searchable = T>(
 
     const query = aql`
       FOR ${l.i} IN ${c}
+        ${inject?.beforeFilter && aql.literal(inject.beforeFilter)}
         ${filterStr}
+        ${inject?.beforeSort && aql.literal(inject.beforeSort)}
         ${sortStr}
+        ${inject?.beforeLimit && aql.literal(inject.beforeLimit)}
         ${limitStr}
+        ${inject?.after && aql.literal(inject.after)}
         RETURN ${l.i}
     `
 
