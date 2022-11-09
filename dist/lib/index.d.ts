@@ -1,13 +1,13 @@
 import { Document } from 'arangojs/documents';
 import { DocumentCollection } from 'arangojs/collection';
-import { GeneratedAqlQuery } from 'arangojs/aql';
+import { AqlLiteral, GeneratedAqlQuery } from 'arangojs/aql';
 import { Database } from 'arangojs';
 /**
  * A `CountFn` function returns the number of documents in a single collection matching search `terms` given.
  *
  * `count()` provides the standard implementation.
  */
-export declare type CountFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>) => Promise<number>;
+export declare type CountFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, inject?: Inject) => Promise<number>;
 /**
  * Recursively renders all of a complex object's properties required, non-null, and non-undefined.
  *
@@ -48,7 +48,26 @@ export declare type Filter<T> = {
  *
  * `find()` provides the standard implementation.
  */
-export declare type FindFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, sort?: Sort<Document<T>>[] | Sort<Document<T>>) => Promise<Document<T> | undefined>;
+export declare type FindFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, sort?: Sort<Document<T>>[] | Sort<Document<T>>, inject?: Inject) => Promise<Document<T> | undefined>;
+/**
+ * An `Inject` object allows modifying a search query with user-defined AQL literal expressions.
+ * This can be useful for complex requirements, such as joining data or setting additional variables with `LET`.
+ *
+ * All injected strings are implicitly converted to AQL literals in the query, so should be manually escaped as needed.
+ *
+ * Note that while `CountFn` and `FindFn` do not use all the same parameters as `SearchFn`, all injections are still
+ * supported so a single injection provider can be used for all query types.
+ */
+export declare type Inject = {
+    /** Injected before FILTER statements. */
+    beforeFilter?: string;
+    /** Injected after FILTER statements, before SORT statements. */
+    beforeSort?: string;
+    /** Injected after SORT statements, before LIMIT statement. */
+    beforeLimit?: string;
+    /** Injected after all other statements. */
+    after?: string;
+};
 /**
  * Query limit.
  * Always a tuple, but the second value can be omitted.
@@ -69,8 +88,18 @@ export declare type Terms<T> = {
 /**
  * A `SearchFn` function matches documents in a single collection and returns a `SearchResult` based on the given
  * `terms`, `limit`, and `sort`.
+ *
+ * A fourth `inject` argument can be given to add user-defined sections to the query, allowing complex requirements
+ * to be added around the core query pattern.
  */
-export declare type SearchFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, limit?: Limit, sort?: Sort<Document<S>>[] | Sort<Document<S>>) => Promise<SearchResult<T>>;
+export declare type SearchFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, limit?: Limit, sort?: Sort<Document<S>>[] | Sort<Document<S>>, inject?: Inject) => Promise<SearchResult<T>>;
+/**
+ * A `SimpleSearchFn` function matches documents in a single collection and returns a `SearchResult` based on the given
+ * `terms`, `limit`, and `sort`.
+ *
+ * This type can be implemented by user code as an alternative to `SearchFn` to prevent further injections.
+ */
+export declare type SimpleSearchFn<T extends Searchable, S extends Searchable = T> = (terms?: Terms<Document<DeepNonNullable<S>>>, limit?: Limit, sort?: Sort<Document<S>>[] | Sort<Document<S>>) => Promise<SearchResult<T>>;
 /**
  * Search results are a tuple of three values:
  *   1. The **total** number of matching documents in the searched collection, ignoring limit
@@ -78,8 +107,13 @@ export declare type SearchFn<T extends Searchable, S extends Searchable = T> = (
  *   3. The AQL query object for the latter (for debugging purposes)
  */
 export declare type SearchResult<T extends Searchable> = [number, Document<T>[], GeneratedAqlQuery];
-/** Query sort order. */
-export declare type Sort<T> = [keyof T, Direction];
+/**
+ * Query sort order as a tuple of key and direction.
+ *
+ * The sort key can be specified as an AQL literal, in which case it will be used exactly as given.
+ * This can be useful in conjunction with query injections.
+ */
+export declare type Sort<T> = [AqlLiteral | keyof T, Direction];
 /** Format scalar or scalar array data for use in AQL. */
 export declare const formatData: <T>(data: T | T[]) => string;
 /** Format scalar data for use in AQL. */

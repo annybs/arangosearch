@@ -109,7 +109,7 @@ var parseFilterOps = function (search) {
  */
 var parseSort = function (s, parent) {
     if (s[0] instanceof Array)
-        return s.map(function (ss) { return "".concat(parent, ".").concat(String(ss[0]), " ").concat(ss[1]); });
+        return s.map(function (ss) { return "".concat(renderSortKey(ss, parent), " ").concat(ss[1]); });
     return ["".concat(parent, ".").concat(String(s[0]), " ").concat(s[1])];
 };
 exports.parseSort = parseSort;
@@ -133,6 +133,12 @@ var parseTerms = function (s, parent) { return Object.keys(s)
     return filters;
 }, []); };
 exports.parseTerms = parseTerms;
+var renderSortKey = function (_a, parent) {
+    var key = _a[0];
+    if (key instanceof Object)
+        return key.toAQL();
+    return "".concat(parent, ".").concat(String(key));
+};
 /**
  * Build and execute a count query that matches documents in a single collection.
  * Returns the total number of matches.
@@ -146,7 +152,7 @@ exports.parseTerms = parseTerms;
 var count = function (db, c, i, n) {
     if (i === void 0) { i = 'i'; }
     if (n === void 0) { n = 'n'; }
-    return function (terms) { return __awaiter(void 0, void 0, void 0, function () {
+    return function (terms, inject) { return __awaiter(void 0, void 0, void 0, function () {
         var filters, filterStr, l, countQuery;
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -154,7 +160,7 @@ var count = function (db, c, i, n) {
                     filters = terms && (0, exports.parseTerms)(terms, i);
                     filterStr = arangojs_1.aql.literal(filters ? filters.map(function (f) { return "FILTER ".concat(f); }).join(' ') : '');
                     l = { i: arangojs_1.aql.literal(i), n: arangojs_1.aql.literal(n) };
-                    countQuery = (0, arangojs_1.aql)(templateObject_1 || (templateObject_1 = __makeTemplateObject(["\n      FOR ", " IN ", "\n        ", "\n        COLLECT WITH COUNT INTO ", "\n        RETURN ", "\n    "], ["\n      FOR ", " IN ", "\n        ", "\n        COLLECT WITH COUNT INTO ", "\n        RETURN ", "\n    "])), l.i, c, filterStr, l.n, l.n);
+                    countQuery = (0, arangojs_1.aql)(templateObject_1 || (templateObject_1 = __makeTemplateObject(["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        COLLECT WITH COUNT INTO ", "\n        RETURN ", "\n    "], ["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        COLLECT WITH COUNT INTO ", "\n        RETURN ", "\n    "])), l.i, c, (inject === null || inject === void 0 ? void 0 : inject.beforeFilter) && arangojs_1.aql.literal(inject.beforeFilter), filterStr, (inject === null || inject === void 0 ? void 0 : inject.beforeSort) && arangojs_1.aql.literal(inject.beforeSort), (inject === null || inject === void 0 ? void 0 : inject.beforeLimit) && arangojs_1.aql.literal(inject.beforeLimit), (inject === null || inject === void 0 ? void 0 : inject.after) && arangojs_1.aql.literal(inject.after), l.n, l.n);
                     return [4 /*yield*/, db.query(countQuery)];
                 case 1: return [4 /*yield*/, (_a.sent()).next()];
                 case 2: return [2 /*return*/, _a.sent()];
@@ -174,7 +180,7 @@ exports.count = count;
  */
 var find = function (db, c, i) {
     if (i === void 0) { i = 'i'; }
-    return function (terms, sort) {
+    return function (terms, sort, inject) {
         if (sort === void 0) { sort = ['_key', 'ASC']; }
         return __awaiter(void 0, void 0, void 0, function () {
             var filters, filterStr, sortStr, l, query, data;
@@ -185,7 +191,7 @@ var find = function (db, c, i) {
                         filterStr = arangojs_1.aql.literal(filters ? filters.map(function (f) { return "FILTER ".concat(f); }).join(' ') : '');
                         sortStr = arangojs_1.aql.literal(sort ? "SORT ".concat((0, exports.parseSort)(sort, 'i').join(', ')) : '');
                         l = { i: arangojs_1.aql.literal(i) };
-                        query = (0, arangojs_1.aql)(templateObject_2 || (templateObject_2 = __makeTemplateObject(["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        LIMIT 1\n        RETURN ", "\n    "], ["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        LIMIT 1\n        RETURN ", "\n    "])), l.i, c, filterStr, sortStr, l.i);
+                        query = (0, arangojs_1.aql)(templateObject_2 || (templateObject_2 = __makeTemplateObject(["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        LIMIT 1\n        RETURN ", "\n    "], ["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        LIMIT 1\n        RETURN ", "\n    "])), l.i, c, (inject === null || inject === void 0 ? void 0 : inject.beforeFilter) && arangojs_1.aql.literal(inject.beforeFilter), filterStr, (inject === null || inject === void 0 ? void 0 : inject.beforeSort) && arangojs_1.aql.literal(inject.beforeSort), sortStr, (inject === null || inject === void 0 ? void 0 : inject.beforeLimit) && arangojs_1.aql.literal(inject.beforeLimit), (inject === null || inject === void 0 ? void 0 : inject.after) && arangojs_1.aql.literal(inject.after), l.i);
                         return [4 /*yield*/, db.query(query)];
                     case 1: return [4 /*yield*/, (_a.sent()).next()];
                     case 2:
@@ -211,7 +217,7 @@ exports.find = find;
 var search = function (db, c, i, n) {
     if (i === void 0) { i = 'i'; }
     if (n === void 0) { n = 'n'; }
-    return function (terms, limit, sort) {
+    return function (terms, limit, sort, inject) {
         if (sort === void 0) { sort = ['_rev', 'ASC']; }
         return __awaiter(void 0, void 0, void 0, function () {
             var filters, filterStr, limitStr, sortStr, l, count, countQuery, query, data;
@@ -225,14 +231,14 @@ var search = function (db, c, i, n) {
                         l = { i: arangojs_1.aql.literal(i), n: arangojs_1.aql.literal(n) };
                         count = 0;
                         if (!limit) return [3 /*break*/, 3];
-                        countQuery = (0, arangojs_1.aql)(templateObject_3 || (templateObject_3 = __makeTemplateObject(["\n        FOR ", " IN ", "\n          ", "\n          COLLECT WITH COUNT INTO ", "\n          RETURN ", "\n      "], ["\n        FOR ", " IN ", "\n          ", "\n          COLLECT WITH COUNT INTO ", "\n          RETURN ", "\n      "])), l.i, c, filterStr, l.n, l.n);
+                        countQuery = (0, arangojs_1.aql)(templateObject_3 || (templateObject_3 = __makeTemplateObject(["\n        FOR ", " IN ", "\n          ", "\n          ", "\n          ", "\n          ", "\n          ", "\n          COLLECT WITH COUNT INTO ", "\n          RETURN ", "\n      "], ["\n        FOR ", " IN ", "\n          ", "\n          ", "\n          ", "\n          ", "\n          ", "\n          COLLECT WITH COUNT INTO ", "\n          RETURN ", "\n      "])), l.i, c, (inject === null || inject === void 0 ? void 0 : inject.beforeFilter) && arangojs_1.aql.literal(inject.beforeFilter), filterStr, (inject === null || inject === void 0 ? void 0 : inject.beforeSort) && arangojs_1.aql.literal(inject.beforeSort), (inject === null || inject === void 0 ? void 0 : inject.beforeLimit) && arangojs_1.aql.literal(inject.beforeLimit), (inject === null || inject === void 0 ? void 0 : inject.after) && arangojs_1.aql.literal(inject.after), l.n, l.n);
                         return [4 /*yield*/, db.query(countQuery)];
                     case 1: return [4 /*yield*/, (_a.sent()).next()];
                     case 2:
                         count = _a.sent();
                         _a.label = 3;
                     case 3:
-                        query = (0, arangojs_1.aql)(templateObject_4 || (templateObject_4 = __makeTemplateObject(["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        RETURN ", "\n    "], ["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        RETURN ", "\n    "])), l.i, c, filterStr, sortStr, limitStr, l.i);
+                        query = (0, arangojs_1.aql)(templateObject_4 || (templateObject_4 = __makeTemplateObject(["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        RETURN ", "\n    "], ["\n      FOR ", " IN ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        ", "\n        RETURN ", "\n    "])), l.i, c, (inject === null || inject === void 0 ? void 0 : inject.beforeFilter) && arangojs_1.aql.literal(inject.beforeFilter), filterStr, (inject === null || inject === void 0 ? void 0 : inject.beforeSort) && arangojs_1.aql.literal(inject.beforeSort), sortStr, (inject === null || inject === void 0 ? void 0 : inject.beforeLimit) && arangojs_1.aql.literal(inject.beforeLimit), limitStr, (inject === null || inject === void 0 ? void 0 : inject.after) && arangojs_1.aql.literal(inject.after), l.i);
                         return [4 /*yield*/, db.query(query)];
                     case 4: return [4 /*yield*/, (_a.sent()).all()];
                     case 5:
