@@ -1,6 +1,6 @@
 {
   "name": "arangosearch",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Single-collection search for ArangoJS",
   "main": "dist/lib/index.js",
   "scripts": {
